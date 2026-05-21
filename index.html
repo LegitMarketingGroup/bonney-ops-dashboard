@@ -346,6 +346,16 @@ const BRAND_COLOR = {
 
 let CURRENT_BRAND = 'all';
 
+// Cap all charts/aggregations at the last COMPLETE month (April 2026).
+// Data ends 2026-05-01 which is only 1 day into May — that partial month
+// makes every chart nosedive at the right edge. By excluding ym >= '2026-05'
+// from monthly/jt_monthly/campaigns aggregations and shifting the L12M /
+// P12M anchor to '2026-04-30', the charts end on a clean trailing-12 view.
+const CHART_LAST_YM = '2026-04';
+const CHART_EFFECTIVE_LAST = '2026-04-30';
+// Override the last_data_day used for window calculations
+data._day_window.last_data_day = CHART_EFFECTIVE_LAST;
+
 // ============ FORMATTERS ============
 function fmtMoney(n) {
   if (n == null || isNaN(n)) return '—';
@@ -369,6 +379,31 @@ function fmtAbs(cur, prv, formatter) {
   const cls = d > 0 ? 'abs-up' : 'abs-dn';
   return `<span class="abs-delta ${cls}">${sign}${formatter(Math.abs(d))}</span>`;
 }
+
+// ============ ROLLING WINDOW RECOMPUTE ============
+// Recompute rolling totals client-side from monthly, applying CHART_LAST_YM
+// filter so L12M = May 2025 - Apr 2026 (instead of May 2025 - May 2026 partial).
+function computeRolling() {
+  const cutL = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
+  const cutP = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 24); return d.toISOString().slice(0,7); })();
+  const all_time = {}, last_12 = {}, prior_12 = {};
+  const init = b => { if (!all_time[b]) all_time[b] = {jobs:0,rev:0}; if (!last_12[b]) last_12[b] = {jobs:0,rev:0}; if (!prior_12[b]) prior_12[b] = {jobs:0,rev:0}; };
+  for (const r of data.monthly) {
+    if (r.ym > CHART_LAST_YM) continue;  // hard skip partial May 2026
+    init(r.brand); init('all');
+    all_time[r.brand].jobs += r.jobs; all_time[r.brand].rev += r.rev;
+    all_time['all'].jobs += r.jobs;     all_time['all'].rev += r.rev;
+    if (r.ym > cutL && r.ym <= CHART_LAST_YM) {
+      last_12[r.brand].jobs += r.jobs; last_12[r.brand].rev += r.rev;
+      last_12['all'].jobs += r.jobs;     last_12['all'].rev += r.rev;
+    } else if (r.ym > cutP && r.ym <= cutL) {
+      prior_12[r.brand].jobs += r.jobs; prior_12[r.brand].rev += r.rev;
+      prior_12['all'].jobs += r.jobs;     prior_12['all'].rev += r.rev;
+    }
+  }
+  data.rolling = { all_time, last_12, prior_12 };
+}
+computeRolling();
 
 // ============ HERO KPI BLOCK ============
 function buildHero() {
@@ -446,6 +481,7 @@ function getMonthlyForBrand(brand) {
   const by = {};
   for (const r of data.monthly) {
     if (!filter(r)) continue;
+    if (r.ym > CHART_LAST_YM) continue;  // skip partial May 2026
     if (!by[r.ym]) by[r.ym] = {ym: r.ym, jobs: 0, rev: 0};
     by[r.ym].jobs += r.jobs;
     by[r.ym].rev += r.rev;
@@ -456,7 +492,7 @@ function getMonthlyForBrand(brand) {
 function getTradeForBrand(brand, monthsBack) {
   const filter = (r) => brand === 'all' || r.brand === brand;
   const cutoff = (() => {
-    const d = new Date(data._day_window.last_data_day);
+    const d = new Date(CHART_EFFECTIVE_LAST);
     d.setMonth(d.getMonth() - monthsBack);
     return d.toISOString().slice(0,7);
   })();
@@ -464,6 +500,7 @@ function getTradeForBrand(brand, monthsBack) {
   for (const r of data.monthly) {
     if (!filter(r)) continue;
     if (r.ym < cutoff) continue;
+    if (r.ym > CHART_LAST_YM) continue;  // exclude partial May 2026
     if (!by[r.trade]) by[r.trade] = {trade: r.trade, jobs: 0, rev: 0};
     by[r.trade].jobs += r.jobs;
     by[r.trade].rev += r.rev;
@@ -602,11 +639,12 @@ function buildJobTypeTable() {
   document.getElementById('jtBrand').textContent = BRAND_LABEL[CURRENT_BRAND];
   const tbody = document.querySelector('#jobTypeTable tbody');
   const filter = (r) => CURRENT_BRAND === 'all' || r.brand === CURRENT_BRAND;
-  const cutoffL = (() => { const d = new Date(data._day_window.last_data_day); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
-  const cutoffP = (() => { const d = new Date(data._day_window.last_data_day); d.setMonth(d.getMonth() - 24); return d.toISOString().slice(0,7); })();
+  const cutoffL = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
+  const cutoffP = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 24); return d.toISOString().slice(0,7); })();
   const last12 = {}, prior12 = {};
   for (const r of data.jt_monthly) {
     if (!filter(r)) continue;
+    if (r.ym > CHART_LAST_YM) continue;  // exclude partial May 2026
     if (r.ym >= cutoffL) {
       if (!last12[r.jt]) last12[r.jt] = {jt: r.jt, trade: r.trade, jobs: 0, rev: 0};
       last12[r.jt].jobs += r.jobs;
@@ -653,11 +691,12 @@ function buildJobTypeTable() {
 function buildCampaignChart() {
   destroyChart('campaign');
   const filter = (r) => CURRENT_BRAND === 'all' || r.brand === CURRENT_BRAND;
-  const cutoff = (() => { const d = new Date(data._day_window.last_data_day); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
+  const cutoff = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
   const by = {};
   for (const r of data.campaigns_monthly) {
     if (!filter(r)) continue;
     if (r.ym < cutoff) continue;
+    if (r.ym > CHART_LAST_YM) continue;  // exclude partial May 2026
     if (!by[r.campaign_category]) by[r.campaign_category] = {cat: r.campaign_category, jobs: 0, rev: 0};
     by[r.campaign_category].jobs += r.jobs;
     by[r.campaign_category].rev += r.rev;
