@@ -109,6 +109,28 @@ a { color: var(--navy); }
 .indent { padding-left: 28px !important; color: var(--muted); font-size: 12px; }
 .disclaim { font-size: 11px; color: var(--muted); margin-top: 10px; padding: 10px 14px; background: var(--soft); border-radius: 6px; border-left: 3px solid var(--line-2); }
 
+/* --- DEMAND GEN: Top Campaigns Grid --- */
+.dg-subnav { display: flex; align-items: center; gap: 18px; padding: 0 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 22px; font-size: 13px; flex-wrap: wrap; }
+.dg-subnav .dg-tab { padding: 8px 14px; border-radius: 8px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.dg-subnav .dg-tab.active { background: var(--navy); color: #fff; }
+.dg-subnav .dg-source { color: var(--muted); font-size: 12px; margin-left: auto; }
+.dg-header { margin-bottom: 14px; }
+.dg-header h3 { font-size: 18px; font-weight: 700; color: var(--navy); margin: 0 0 4px; }
+.dg-header .dg-sub { font-size: 12px; color: var(--muted); }
+.tc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 880px) { .tc-grid { grid-template-columns: 1fr; } }
+.tc-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+.tc-card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+.tc-card-name { font-size: 14px; font-weight: 700; color: var(--navy); }
+.tc-card-allTime { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tc-card-ytd { text-align: right; font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 0.4px; line-height: 1.3; }
+.tc-card-ytd .ytd-val { display: block; font-size: 13px; font-weight: 700; margin-top: 2px; }
+.tc-card-ytd .ytd-val.pos { color: #16A34A; }
+.tc-card-ytd .ytd-val.neg { color: #DC2626; }
+.tc-card-ytd .ytd-val.neu { color: var(--muted); }
+.tc-card-chart { position: relative; height: 130px; margin-top: 8px; }
+.tc-empty { padding: 36px 20px; text-align: center; color: var(--muted); font-size: 13px; background: var(--soft); border-radius: 10px; }
+
 /* --- LOGIN GATE --- */
 .gate { position: fixed; inset: 0; background: var(--navy); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .gate-card { background: #fff; border-radius: 14px; padding: 32px; width: 360px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
@@ -119,6 +141,11 @@ a { color: var(--navy); }
 .gate-card input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box; }
 .gate-card button { width: 100%; padding: 12px; background: var(--red); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; margin-top: 14px; }
 .gate-card button:hover { background: var(--red-2); }
+.gate-brand { text-align: center; padding: 4px 0 22px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+.gate-logo { max-width: 220px; height: auto; display: block; margin: 0 auto 4px; }
+.gate-divider { width: 40px; height: 2px; background: var(--red); margin: 8px auto 6px; border-radius: 1px; }
+.gate-holdco { font-size: 11px; font-weight: 700; letter-spacing: 3px; color: var(--navy); margin-bottom: 6px; }
+.gate-subhead { font-size: 11px; font-weight: 600; color: var(--red); text-transform: uppercase; letter-spacing: 1.2px; }
 .gate-card .err { color: var(--red); font-size: 12px; margin-top: 10px; display: none; }
 
 /* --- footer --- */
@@ -131,12 +158,12 @@ a { color: var(--navy); }
 <!-- LOGIN GATE -->
 <div class="gate" id="gate">
   <div class="gate-card">
-    <div class="header">
-      <div class="brand-logo">B</div>
-      <div class="brand-text">
-        <h1>Bonney Hold Co</h1>
-        <div class="subhead">Operations Intelligence</div>
-      </div>
+    <div class="gate-brand">
+      <img class="gate-logo" src="https://www.bonney.com/wp-content/uploads/2020/06/bonney-light.png" alt="Bonney" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+      <div class="gate-logo-fallback" style="display:none;font-family:'Georgia',serif;font-size:36px;font-weight:700;letter-spacing:2px;color:#0A1F44;">BONNEY</div>
+      <div class="gate-divider"></div>
+      <div class="gate-holdco">HOLD CO</div>
+      <div class="gate-subhead">Operations Intelligence</div>
     </div>
     <label>Dashboard Password</label>
     <input type="password" id="gpw" placeholder="Enter password" autofocus>
@@ -291,7 +318,19 @@ a { color: var(--navy); }
   <!-- DEMAND GEN -->
   <div class="panel" id="p-demand">
     <div class="section">
-      <h2><span class="label">Demand Gen</span>Campaign Attribution · Last 12 months</h2>
+      <h2><span class="label">Marketing</span>Demand Generation</h2>
+      <div class="dg-subnav">
+        <div class="dg-tab active">Channel Mix</div>
+        <div class="dg-source">Source: ServiceTitan Brand Reports · Campaign field · May 2023 → Apr 2026</div>
+      </div>
+      <div class="dg-header">
+        <h3>Top 8 Campaigns — Individual Revenue Trends (Monthly)</h3>
+        <div class="dg-sub">One chart per campaign so each trend stands on its own. Sorted by all-time revenue · Filter by brand using the picker above.</div>
+      </div>
+      <div class="tc-grid" id="topCampaignsGrid"></div>
+    </div>
+    <div class="section">
+      <h2><span class="label">Detail</span>Campaign Attribution · Last 12 Months</h2>
       <div class="chart-card">
         <div class="chart-title">Jobs by Campaign Category</div>
         <div class="chart-wrap tall"><canvas id="campaignChart"></canvas></div>
@@ -688,6 +727,153 @@ function buildJobTypeTable() {
   tbody.innerHTML = rows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted);">No data for this brand.</td></tr>';
 }
 
+function buildTopCampaigns() {
+  // destroy any prior tc-* chart instances
+  Object.keys(chartInstances).forEach(k => { if (k.indexOf('tc_') === 0) { destroyChart(k); } });
+
+  const grid = document.getElementById('topCampaignsGrid');
+  if (!grid) return;
+
+  const filter = (r) => CURRENT_BRAND === 'all' || r.brand === CURRENT_BRAND;
+
+  // Aggregate by campaign_category for all-time totals AND monthly series (capped at CHART_LAST_YM)
+  const series = {};      // {campaign: {ym: rev}}
+  const allTime = {};     // {campaign: totalRev}
+  const ymsSet = new Set();
+  for (const r of data.campaigns_monthly) {
+    if (!filter(r)) continue;
+    if (r.ym > CHART_LAST_YM) continue;  // exclude partial May 2026
+    const cat = r.campaign_category || '(Uncategorized)';
+    if (!series[cat]) series[cat] = {};
+    series[cat][r.ym] = (series[cat][r.ym] || 0) + r.rev;
+    allTime[cat] = (allTime[cat] || 0) + r.rev;
+    ymsSet.add(r.ym);
+  }
+
+  // pick top 8 by all-time revenue
+  const top = Object.entries(allTime).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  if (top.length === 0) {
+    grid.innerHTML = '<div class="tc-empty">No campaign data for this brand selection.</div>';
+    return;
+  }
+
+  // build full sorted ym axis (months from earliest data through CHART_LAST_YM)
+  const allYms = Array.from(ymsSet).sort();
+
+  // compute a common Y-axis max so charts are visually comparable (round up to nearest 100K)
+  let globalMax = 0;
+  for (const [cat] of top) {
+    const ms = series[cat] || {};
+    for (const ym of allYms) {
+      const v = ms[ym] || 0;
+      if (v > globalMax) globalMax = v;
+    }
+  }
+  const ySuggestedMax = Math.ceil(globalMax / 100000) * 100000;
+
+  // YTD helper: Jan→Apr for the year (since we cap at Apr 2026)
+  function ytdSum(catSeries, year) {
+    let s = 0;
+    for (let m=1; m<=4; m++) {
+      const ym = `${year}-${String(m).padStart(2,'0')}`;
+      s += (catSeries[ym] || 0);
+    }
+    return s;
+  }
+
+  const PALETTE = ['#0A1F44','#DC2626','#1D4ED8','#16A34A','#7C3AED','#EA580C','#0891B2','#BE185D'];
+
+  grid.innerHTML = top.map(([cat, total], i) => {
+    const ytdCur = ytdSum(series[cat], 2026);
+    const ytdLy  = ytdSum(series[cat], 2025);
+    let ytdHtml;
+    if (ytdLy === 0 && ytdCur === 0) {
+      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val neu">—</span></div>`;
+    } else if (ytdLy === 0) {
+      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val pos">NEW</span></div>`;
+    } else {
+      const pct = (ytdCur - ytdLy) / ytdLy * 100;
+      const cls = pct >= 0 ? 'pos' : 'neg';
+      const sign = pct >= 0 ? '+' : '';
+      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val ${cls}">${sign}${pct.toFixed(1)}%</span></div>`;
+    }
+    const allTimeStr = total >= 1000000 ? `$${(total/1000000).toFixed(2)}M` : `$${Math.round(total/1000).toLocaleString()}K`;
+    return `
+      <div class="tc-card">
+        <div class="tc-card-head">
+          <div>
+            <div class="tc-card-name">${cat}</div>
+            <div class="tc-card-allTime">All-time: ${allTimeStr}</div>
+          </div>
+          ${ytdHtml}
+        </div>
+        <div class="tc-card-chart"><canvas id="tcChart-${i}"></canvas></div>
+      </div>`;
+  }).join('');
+
+  // labels — just the year for each January, blank otherwise (mimics the example screenshots)
+  const labels = allYms.map(ym => {
+    const [y,m] = ym.split('-');
+    return m === '01' ? y : '';
+  });
+
+  top.forEach(([cat], i) => {
+    const cv = document.getElementById(`tcChart-${i}`);
+    if (!cv) return;
+    const ms = series[cat] || {};
+    const dataPoints = allYms.map(ym => ms[ym] || 0);
+    const color = PALETTE[i % PALETTE.length];
+    chartInstances['tc_'+i] = new Chart(cv.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: dataPoints,
+          borderColor: color,
+          backgroundColor: color + '22',
+          borderWidth: 1.8,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: true,
+          tension: 0.35,
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        responsive: true,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                const idx = items[0].dataIndex;
+                return allYms[idx];
+              },
+              label: (ctx) => fmtMoney(ctx.parsed.y),
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#94A3B8', autoSkip: false, maxRotation: 0 } },
+          y: {
+            beginAtZero: true,
+            suggestedMax: ySuggestedMax,
+            grid: { color: '#F1F5F9', drawBorder: false },
+            ticks: {
+              font: { size: 9 },
+              color: '#94A3B8',
+              callback: (v) => v >= 1000 ? '$' + Math.round(v/1000) + 'K' : '$' + v,
+              maxTicksLimit: 6,
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
 function buildCampaignChart() {
   destroyChart('campaign');
   const filter = (r) => CURRENT_BRAND === 'all' || r.brand === CURRENT_BRAND;
@@ -756,7 +942,7 @@ function rerenderAll() {
   if (document.getElementById('p-pnl').classList.contains('active')) { buildTradeBarChart(); buildJobsChart(); }
   if (document.getElementById('p-services').classList.contains('active')) buildServiceChart();
   if (document.getElementById('p-jobtypes').classList.contains('active')) buildJobTypeTable();
-  if (document.getElementById('p-demand').classList.contains('active')) buildCampaignChart();
+  if (document.getElementById('p-demand').classList.contains('active')) { buildTopCampaigns(); buildCampaignChart(); }
 }
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab)));
