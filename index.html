@@ -732,9 +732,9 @@ if (last) {
 }
 
 // ============ GATE ============
-const GATE_PW = 'bonney2026';
+const GATE_PW = 'Legit26!';
 function unlockGate() {
-  const v = document.getElementById('gpw').value.trim().toLowerCase();
+  const v = document.getElementById('gpw').value.trim();
   if (v === GATE_PW) {
     document.getElementById('gate').style.display = 'none';
     sessionStorage.setItem('bonney_unlocked', '1');
