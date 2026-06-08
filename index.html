@@ -583,6 +583,31 @@ a { color: var(--navy); }
   </div>
   <!-- DEMAND GEN -->
   <div class="panel" id="p-demand">
+    <div class="section">
+      <h2><span class="label">Marketing investment</span>Monthly spend and channel mix from accounting GL</h2>
+      <div class="chart-card">
+        <div class="chart-title">Monthly marketing spend, last 24 months <span class="pill" id="dgMktSpendBrand">All brands</span></div>
+        <div class="chart-wrap tall"><canvas id="dgMktSpendChart"></canvas></div>
+      </div>
+      <div class="chart-card" style="margin-top:14px;overflow-x:auto;">
+        <div class="chart-title">Channel mix, last 12 months</div>
+        <table class="dt" id="dgChannelTable">
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th class="num">L12M spend</th>
+              <th class="num">% of total</th>
+              <th class="num">Monthly avg</th>
+              <th class="num">Trend (24-mo)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">
+          Source: General Ledger detail report, 2023 through April 2026 (5,856 transactions). Channel categories: Internet, Direct Mail, TV, Radio, Sponsorship, Public Relations, Home Shows / Events, Yellow Pages, Member Retention, Email, General. Big Air marketing is not in the GL source file, so the channel mix table shows n/a when Big Air is selected; the monthly spend chart still covers Big Air via the Income Statement file.
+        </div>
+      </div>
+    </div>
         <div class="section">
       <h2><span class="label">Marketing</span>Campaign funnel: calls, bookings, completed jobs, revenue</h2>
       <div class="dg-subnav">
@@ -1744,6 +1769,88 @@ function buildCustomerMixChart() {
   });
 }
 
+function buildDgMarketingSpend() {
+  destroyChart('dgMktSpend');
+  const fin = data.financial || {};
+  const brands = ['bonney','peter_levi','gallaghers','big_air'];
+  const brandLabels = { bonney:'Bonney', peter_levi:'Peter Levi', gallaghers:'Gallaghers', big_air:'Big Air' };
+  const brandsForView = CURRENT_BRAND === 'all' ? brands : [CURRENT_BRAND];
+
+  const fmtM = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
+
+  // Build set of all months from monthly_actuals
+  const allYms = new Set();
+  for (const b of brandsForView) {
+    const ma = fin.monthly_actuals && fin.monthly_actuals[b];
+    if (!ma) continue;
+    Object.keys(ma.mkt || {}).forEach(y => allYms.add(y));
+  }
+  const yms = Array.from(allYms).sort();
+  const last24 = yms.slice(-24);
+
+  const series = last24.map(y => {
+    let s = 0;
+    for (const b of brandsForView) {
+      const ma = fin.monthly_actuals && fin.monthly_actuals[b];
+      if (!ma) continue;
+      s += (ma.mkt || {})[y] || 0;
+    }
+    return s;
+  });
+
+  document.getElementById('dgMktSpendBrand').textContent = CURRENT_BRAND === 'all' ? 'All brands' : brandLabels[CURRENT_BRAND];
+
+  chartInstances.dgMktSpend = new Chart(document.getElementById('dgMktSpendChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels: last24, datasets: [{
+      data: series,
+      backgroundColor: BRAND_COLOR[CURRENT_BRAND] || '#0A1F44',
+      label: 'Marketing spend',
+    }]},
+    options: { maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtM(c.parsed.y) + ' marketing spend' } } },
+      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { callback: v => fmtM(v) } } }
+    }
+  });
+
+  // Channel mix L12M
+  const last12 = yms.slice(-12);
+  const channelL12 = {};
+  const last24Channels = {};
+  for (const b of brandsForView) {
+    const cs = fin.channel_spend && fin.channel_spend[b];
+    if (!cs) continue;
+    for (const ym of last12) {
+      const m = cs[ym] || {};
+      for (const ch in m) channelL12[ch] = (channelL12[ch] || 0) + m[ch];
+    }
+    for (const ym of last24) {
+      const m = cs[ym] || {};
+      for (const ch in m) {
+        if (!last24Channels[ch]) last24Channels[ch] = new Array(last24.length).fill(0);
+        last24Channels[ch][last24.indexOf(ym)] += m[ch];
+      }
+    }
+  }
+  const total = Object.values(channelL12).reduce((s,v) => s+v, 0);
+  const sorted = Object.entries(channelL12).sort((a,b) => b[1] - a[1]).slice(0, 12);
+  const tbody = document.querySelector('#dgChannelTable tbody');
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No GL channel detail for ${CURRENT_BRAND === 'all' ? 'this brand selection' : brandLabels[CURRENT_BRAND]} in source file.</td></tr>`;
+  } else {
+    tbody.innerHTML = sorted.map(([ch, v]) => {
+      const pct = total > 0 ? (v/total*100).toFixed(1) + '%' : 'n/a';
+      const monthly = v / 12;
+      const trend = last24Channels[ch] || [];
+      const max = Math.max(1, ...trend);
+      const w = 80, h = 24;
+      const pts = trend.map((y, i) => `${i * (w/Math.max(1,trend.length-1))},${h - (y/max*h)}`).join(' ');
+      const spark = `<svg width="${w}" height="${h}" style="vertical-align:middle;"><polyline fill="none" stroke="var(--navy)" stroke-width="1.5" points="${pts}"/></svg>`;
+      return `<tr><td>${ch}</td><td class="num">${fmtM(v)}</td><td class="num">${pct}</td><td class="num">${fmtM(monthly)}</td><td class="num">${spark}</td></tr>`;
+    }).join('');
+  }
+}
+
 function buildMarketingAttribution() {
   if (typeof MA_PERIOD_MODE === 'undefined') { window.MA_PERIOD_MODE = 'FY'; }
   const periods_FY  = ['2023_FY','2024_FY','2025_FY'];
@@ -1873,7 +1980,7 @@ function rerenderAll() {
   if (document.getElementById('p-customers').classList.contains('active')) { buildCustomerKpis(); buildCustomerTrendChart(); buildCustomerMixChart(); buildCustomerFrequency(); }
   if (document.getElementById('p-territory').classList.contains('active')) buildTerritory();
   if (document.getElementById('p-financial').classList.contains('active')) buildFinancial();
-  if (document.getElementById('p-demand').classList.contains('active')) { buildMarketingAttribution(); buildTopCampaigns(); buildCampaignChart(); }
+  if (document.getElementById('p-demand').classList.contains('active')) { buildDgMarketingSpend(); buildMarketingAttribution(); buildTopCampaigns(); buildCampaignChart(); }
 }
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab)));
