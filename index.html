@@ -100,6 +100,28 @@ a { color: var(--navy); }
 .dt .bucket-row { background: rgba(10,31,68,0.04); font-weight: 700; }
 .dt .retired-row { opacity: 0.55; background: rgba(0,0,0,0.02); font-style: italic; color: var(--muted); }
 .dt .retired-tag { color: var(--muted-2); font-size: 11px; font-style: italic; font-weight: 400; margin-left: 6px; }
+/* Period-over-period deltas (PoP) - apply everywhere a current-period value is shown */
+.delta-pct { font-size: 12px; font-weight: 700; margin-right: 6px; }
+.delta-pct.pos { color: #16A34A; }
+.delta-pct.neg { color: #DC2626; }
+.delta-pct.flat { color: var(--muted); }
+.delta-abs { font-size: 11px; color: var(--muted); font-weight: 500; }
+.cell-val { font-weight: 600; font-feature-settings: 'tnum' 1; }
+.cell-delta { font-size: 10px; font-weight: 500; margin-top: 2px; line-height: 1.25; font-feature-settings: 'tnum' 1; }
+.cell-delta.pos { color: #16A34A; }
+.cell-delta.neg { color: #DC2626; }
+.cell-delta.flat { color: var(--muted); }
+.kpi-delta-line { margin-top: 6px; line-height: 1.3; }
+.kpi-delta-line .delta-abs { display: block; margin-top: 2px; }
+.brand-card-row .val .delta-pct, .brand-card-row .val .delta-abs { font-size: 10px; }
+.brand-card-row .row-sub { display: block; font-size: 10px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+.bv-tile .bv-pop { font-size: 10px; color: var(--muted); margin-top: 4px; line-height: 1.25; font-feature-settings: 'tnum' 1; }
+.bv-tile .bv-pop.pos { color: #16A34A; }
+.bv-tile .bv-pop.neg { color: #DC2626; }
+.terr-metro-card .tm-pop { font-size: 10px; margin-top: 4px; font-feature-settings: 'tnum' 1; }
+.terr-metro-card .tm-pop.pos { color: #16A34A; }
+.terr-metro-card .tm-pop.neg { color: #DC2626; }
+.terr-metro-card .tm-pop.flat { color: var(--muted); }
 .pct-up { color: var(--green); font-weight: 700; font-size: 11px; margin-left: 6px; }
 .pct-dn { color: var(--red); font-weight: 700; font-size: 11px; margin-left: 6px; }
 .pct-flat { color: var(--muted); font-size: 11px; margin-left: 6px; }
@@ -665,8 +687,8 @@ a { color: var(--navy); }
           <thead>
             <tr>
               <th>Trade</th>
-              <th class="num">Jobs</th>
-              <th class="num">Revenue</th>
+              <th class="num">Jobs (L12M)</th>
+              <th class="num">Revenue (L12M)</th>
               <th class="num">Avg ticket</th>
               <th class="num">Share of brand</th>
               <th class="num">GM%</th>
@@ -743,14 +765,15 @@ a { color: var(--navy); }
     <div class="section">
       <h2><span class="label">Concentration</span>Top 30 ZIPs by revenue | last 36 months</h2>
       <div class="chart-card" style="overflow-x:auto;">
+        <div class="disclaim" style="margin-top:0;margin-bottom:10px;">Source data is a 36-month aggregate per ZIP. Per-ZIP L12M vs P12M trend is not in the ZIP rollup; see the brand-vs-brand scorecard for portfolio-level PoP. The 2yr ZHVI column shows the per-ZIP 2-year home-value growth as a directional proxy.</div>
         <table class="dt" id="terrZipTable">
           <thead>
             <tr>
               <th>ZIP</th>
               <th>City</th>
               <th>Metro</th>
-              <th class="num">Jobs</th>
-              <th class="num">Revenue</th>
+              <th class="num">Jobs (36-mo)</th>
+              <th class="num">Revenue (36-mo)</th>
               <th class="num">Avg ticket</th>
               <th class="num">Households</th>
               <th class="num">Med HH income</th>
@@ -829,7 +852,7 @@ a { color: var(--navy); }
             <thead>
               <tr>
                 <th>Channel</th>
-                <th class="num">L12M spend</th>
+                <th class="num">L12M spend vs P12M</th>
                 <th class="num">% of total</th>
                 <th class="num">Monthly avg</th>
                 <th class="num">Trend (24-mo)</th>
@@ -994,7 +1017,7 @@ function fmtAbs(cur, prv, formatter) {
   if (prv == null) return '';
   const d = cur - prv;
   if (d === 0) return '';
-  const sign = d > 0 ? '+' : '−';
+  const sign = d > 0 ? '+' : '-';
   const cls = d > 0 ? 'abs-up' : 'abs-dn';
   return `<span class="abs-delta ${cls}">${sign}${formatter(Math.abs(d))}</span>`;
 }
@@ -1032,34 +1055,42 @@ function buildHero() {
   const at = data.rolling.all_time[CURRENT_BRAND] || {jobs:0, rev:0};
   const avgTicket = lt.jobs ? lt.rev / lt.jobs : 0;
   const pyAvgTicket = pr.jobs ? pr.rev / pr.jobs : 0;
-  const revDelta = pr.rev ? ((lt.rev/pr.rev)-1)*100 : 0;
-  const jobsDelta = pr.jobs ? ((lt.jobs/pr.jobs)-1)*100 : 0;
-  const tkDelta = pyAvgTicket ? ((avgTicket/pyAvgTicket)-1)*100 : 0;
-
+  const popLine = (cur, prv, fmt, label) => {
+    if (!prv) return '<div class="kpi-delta-line"><span class="delta-pct flat">no prior</span></div>';
+    const pct = (cur/prv - 1) * 100;
+    const cls = pct > 0.05 ? 'pos' : pct < -0.05 ? 'neg' : 'flat';
+    const sign = pct >= 0 ? '+' : '-';
+    const abs = cur - prv;
+    const absSign = abs >= 0 ? '+' : '-';
+    return `<div class="kpi-delta-line"><span class="delta-pct ${cls}">${sign}${Math.abs(pct).toFixed(1)}%</span><span class="delta-abs">${absSign}${fmt(Math.abs(abs))} vs ${label} (${fmt(prv)})</span></div>`;
+  };
+  const moneyFmt = x => fmtMoney(x);
+  const intFmt = x => fmtInt(x);
+  const tkFmt = x => '$' + Math.round(x).toLocaleString();
   const html = `
     <div class="kpi">
-      <div class="kpi-label">L12M Revenue</div>
+      <div class="kpi-label">L12M revenue</div>
       <div class="kpi-value">${fmtMoney(lt.rev)}</div>
-      <div class="kpi-sub">${lab} | vs ${fmtMoney(pr.rev)} prior 12m</div>
-      <div class="kpi-delta ${revDelta>0?'up':revDelta<0?'down':'flat'}">${revDelta>=0?'+':'-'} ${Math.abs(revDelta).toFixed(1)}% YoY ${fmtAbs(lt.rev, pr.rev, fmtMoney)}</div>
+      <div class="kpi-sub">${lab} | May 2025 to Apr 2026</div>
+      ${popLine(lt.rev, pr.rev, moneyFmt, 'P12M')}
     </div>
     <div class="kpi">
-      <div class="kpi-label">L12M Jobs Completed</div>
+      <div class="kpi-label">L12M jobs completed</div>
       <div class="kpi-value">${fmtInt(lt.jobs)}</div>
-      <div class="kpi-sub">${lab} | vs ${fmtInt(pr.jobs)} prior 12m</div>
-      <div class="kpi-delta ${jobsDelta>0?'up':jobsDelta<0?'down':'flat'}">${jobsDelta>=0?'+':'-'} ${Math.abs(jobsDelta).toFixed(1)}% YoY ${fmtAbs(lt.jobs, pr.jobs, fmtInt)}</div>
+      <div class="kpi-sub">${lab} | May 2025 to Apr 2026</div>
+      ${popLine(lt.jobs, pr.jobs, intFmt, 'P12M')}
     </div>
     <div class="kpi">
-      <div class="kpi-label">L12M Avg Ticket</div>
+      <div class="kpi-label">L12M avg ticket</div>
       <div class="kpi-value">$${Math.round(avgTicket).toLocaleString()}</div>
-      <div class="kpi-sub">${lab} | vs $${Math.round(pyAvgTicket).toLocaleString()} prior 12m</div>
-      <div class="kpi-delta ${tkDelta>0?'up':tkDelta<0?'down':'flat'}">${tkDelta>=0?'+':'-'} ${Math.abs(tkDelta).toFixed(1)}% YoY ${fmtAbs(avgTicket, pyAvgTicket, x => '$'+Math.round(x).toLocaleString())}</div>
+      <div class="kpi-sub">${lab} | May 2025 to Apr 2026</div>
+      ${popLine(avgTicket, pyAvgTicket, tkFmt, 'P12M')}
     </div>
     <div class="kpi">
-      <div class="kpi-label">All-Time Revenue</div>
+      <div class="kpi-label">All-time revenue</div>
       <div class="kpi-value">${fmtMoney(at.rev)}</div>
       <div class="kpi-sub">${lab} | ${fmtInt(at.jobs)} completed jobs</div>
-      <div class="kpi-delta flat">May 2023 → ${data._day_window.last_data_day}</div>
+      <div class="kpi-delta-line"><span class="delta-abs">since May 2023</span></div>
     </div>
   `;
   document.getElementById('heroKpis').innerHTML = html;
@@ -1071,21 +1102,35 @@ function buildBrandCards(targetId) {
   const target = document.getElementById(targetId);
   if (!target) return;
   const brands = ['bonney','peter_levi','gallaghers','big_air'];
+  const absSub = (cur, prv, fmt) => {
+    if (!prv) return '';
+    const abs = cur - prv;
+    const sign = abs >= 0 ? '+' : '-';
+    return `<span class="row-sub">${sign}${fmt(Math.abs(abs))} vs ${fmt(prv)} P12M</span>`;
+  };
+  const tkSub = (cur, prv) => {
+    if (!prv) return '';
+    const abs = cur - prv;
+    const pct = (cur/prv - 1) * 100;
+    const cls = pct > 0.05 ? 'pos' : pct < -0.05 ? 'neg' : 'flat';
+    const sign = pct >= 0 ? '+' : '-';
+    const absSign = abs >= 0 ? '+' : '-';
+    return `<span class="delta-pct ${cls}" style="font-size:10px;">${sign}${Math.abs(pct).toFixed(1)}%</span><span class="row-sub">${absSign}$${Math.abs(Math.round(abs)).toLocaleString()} vs $${Math.round(prv).toLocaleString()} P12M</span>`;
+  };
   target.innerHTML = brands.map(b => {
     const lt = data.rolling.last_12[b] || {jobs:0, rev:0};
     const pr = data.rolling.prior_12[b] || {jobs:0, rev:0};
     const at = data.rolling.all_time[b] || {jobs:0, rev:0};
     const tk = lt.jobs ? lt.rev / lt.jobs : 0;
-    const revD = pr.rev ? ((lt.rev/pr.rev)-1)*100 : 0;
-    const jobsD = pr.jobs ? ((lt.jobs/pr.jobs)-1)*100 : 0;
+    const ptk = pr.jobs ? pr.rev / pr.jobs : 0;
     const color = BRAND_COLOR[b];
     return `
       <div class="brand-card" style="border-top-color:${color};cursor:pointer;" onclick="selectBrand('${b}')">
         <div class="brand-card-name">${BRAND_LABEL[b]}</div>
         <div class="brand-card-tag">California</div>
-        <div class="brand-card-row"><span class="lbl">L12M Revenue</span><span class="val">${fmtMoney(lt.rev)} ${fmtPct(lt.rev, pr.rev)}</span></div>
-        <div class="brand-card-row"><span class="lbl">L12M Jobs</span><span class="val">${fmtInt(lt.jobs)} ${fmtPct(lt.jobs, pr.jobs)}</span></div>
-        <div class="brand-card-row"><span class="lbl">Avg Ticket</span><span class="val">$${Math.round(tk).toLocaleString()}</span></div>
+        <div class="brand-card-row"><span class="lbl">L12M revenue</span><span class="val">${fmtMoney(lt.rev)} ${fmtPct(lt.rev, pr.rev)}${absSub(lt.rev, pr.rev, fmtMoney)}</span></div>
+        <div class="brand-card-row"><span class="lbl">L12M jobs</span><span class="val">${fmtInt(lt.jobs)} ${fmtPct(lt.jobs, pr.jobs)}${absSub(lt.jobs, pr.jobs, fmtInt)}</span></div>
+        <div class="brand-card-row"><span class="lbl">Avg ticket</span><span class="val">$${Math.round(tk).toLocaleString()} ${tkSub(tk, ptk)}</span></div>
         <div class="brand-card-row"><span class="lbl">All-time</span><span class="val">${fmtMoney(at.rev)} | ${fmtInt(at.jobs)} jobs</span></div>
       </div>`;
   }).join('');
@@ -1239,17 +1284,39 @@ function buildServiceChart() {
     }
   });
 
-  // Table
+  // Table with per-trade L12M vs P12M PoP
   const tbody = document.querySelector('#serviceTable tbody');
+  const cutoffL = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 12); return d.toISOString().slice(0,7); })();
+  const cutoffP = (() => { const d = new Date(CHART_EFFECTIVE_LAST); d.setMonth(d.getMonth() - 24); return d.toISOString().slice(0,7); })();
+  const fltr = (r) => CURRENT_BRAND === 'all' || r.brand === CURRENT_BRAND;
+  const p12 = {};
+  for (const r of data.monthly) {
+    if (!fltr(r)) continue;
+    if (r.ym <= cutoffP || r.ym > cutoffL) continue;
+    if (!p12[r.trade]) p12[r.trade] = {trade:r.trade, jobs:0, rev:0};
+    p12[r.trade].jobs += r.jobs;
+    p12[r.trade].rev += r.rev;
+  }
+  const popCell = (cur, prv, fmt, periodLabel) => {
+    if (cur == null) return '<div class="cell-val">n/a</div>';
+    if (prv == null || prv === 0) return `<div class="cell-val">${fmt(cur)}</div><div class="cell-delta flat">no prior ${periodLabel}</div>`;
+    const pct = (cur/prv - 1) * 100;
+    const cls = pct > 0.05 ? 'pos' : pct < -0.05 ? 'neg' : 'flat';
+    const sign = pct >= 0 ? '+' : '-';
+    return `<div class="cell-val">${fmt(cur)}</div><div class="cell-delta ${cls}">${sign}${Math.abs(pct).toFixed(1)}% vs ${fmt(prv)} ${periodLabel}</div>`;
+  };
   tbody.innerHTML = trades.map(r => {
     const tk = r.jobs ? r.rev / r.jobs : 0;
     const share = total ? (r.rev/total*100) : 0;
+    const p = p12[r.trade] || null;
+    const ptk = p && p.jobs ? p.rev / p.jobs : null;
     return `<tr>
       <td>${r.trade}</td>
-      <td class="num">${fmtInt(r.jobs)}</td>
-      <td class="num">${fmtMoney(r.rev)}</td>
-      <td class="num">$${Math.round(tk).toLocaleString()}</td>
+      <td class="num">${popCell(r.jobs, p ? p.jobs : null, fmtInt, 'P12M')}</td>
+      <td class="num">${popCell(r.rev, p ? p.rev : null, fmtMoney, 'P12M')}</td>
+      <td class="num">${popCell(tk, ptk, x => '$' + Math.round(x).toLocaleString(), 'P12M')}</td>
       <td class="num">${share.toFixed(1)}%</td>
+      <td class="num" style="color:var(--muted);">n/a</td>
     </tr>`;
   }).join('');
 }
@@ -1281,7 +1348,7 @@ function buildJobTypeTable() {
   let rows = active.map(r => {
     const p = prior12[r.jt];
     const tk = r.jobs ? r.rev / r.jobs : 0;
-    const jobsCell = p ? `${fmtInt(r.jobs)} ${fmtPct(r.jobs, p.jobs)} <span class="abs-delta ${r.jobs >= p.jobs ? 'abs-up' : 'abs-dn'}">${r.jobs >= p.jobs ? '+' : '−'}${Math.abs(r.jobs - p.jobs).toLocaleString()}</span>`
+    const jobsCell = p ? `${fmtInt(r.jobs)} ${fmtPct(r.jobs, p.jobs)} <span class="abs-delta ${r.jobs >= p.jobs ? 'abs-up' : 'abs-dn'}">${r.jobs >= p.jobs ? '+' : '-'}${Math.abs(r.jobs - p.jobs).toLocaleString()}</span>`
                     : `${fmtInt(r.jobs)} <span class="new-tag">new</span>`;
     const revCell = p ? `${fmtMoney(r.rev)} ${fmtPct(r.rev, p.rev)} ${fmtAbs(r.rev, p.rev, fmtMoney)}`
                        : `${fmtMoney(r.rev)} <span class="new-tag">new</span>`;
@@ -1297,7 +1364,7 @@ function buildJobTypeTable() {
     rows += retired.map(r => {
       const tk = r.jobs ? r.rev / r.jobs : 0;
       return `<tr class="retired-row">
-        <td>${r.jt} <span class="retired-tag">✕ retired</span></td>
+        <td>${r.jt} <span class="retired-tag">retired</span></td>
         <td class="num">${fmtInt(r.jobs)}</td>
         <td class="num">${fmtMoney(r.rev)}</td>
         <td class="num">$${Math.round(tk).toLocaleString()}</td>
@@ -1356,7 +1423,7 @@ function buildTopCampaigns() {
     return step * mag;
   }
 
-  // YTD helper: Jan→Apr for the year (since we cap at Apr 2026)
+  // YTD helper: Jan to Apr for the year (since we cap at Apr 2026)
   function ytdSum(catSeries, year) {
     let s = 0;
     for (let m=1; m<=4; m++) {
@@ -1373,14 +1440,14 @@ function buildTopCampaigns() {
     const ytdLy  = ytdSum(series[cat], 2025);
     let ytdHtml;
     if (ytdLy === 0 && ytdCur === 0) {
-      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val neu">, </span></div>`;
+      ytdHtml = `<div class="tc-card-ytd">YTD '25 vs '26<span class="ytd-val neu">, </span></div>`;
     } else if (ytdLy === 0) {
-      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val pos">NEW</span></div>`;
+      ytdHtml = `<div class="tc-card-ytd">YTD '25 vs '26<span class="ytd-val pos">NEW</span></div>`;
     } else {
       const pct = (ytdCur - ytdLy) / ytdLy * 100;
       const cls = pct >= 0 ? 'pos' : 'neg';
       const sign = pct >= 0 ? '+' : '';
-      ytdHtml = `<div class="tc-card-ytd">YTD '25→'26<span class="ytd-val ${cls}">${sign}${pct.toFixed(1)}%</span></div>`;
+      ytdHtml = `<div class="tc-card-ytd">YTD '25 vs '26<span class="ytd-val ${cls}">${sign}${pct.toFixed(1)}%</span></div>`;
     }
     const allTimeStr = total >= 1000000 ? `$${(total/1000000).toFixed(2)}M` : `$${Math.round(total/1000).toLocaleString()}K`;
     return `
@@ -1787,6 +1854,7 @@ function buildTerritory() {
       <div class="tm-share">${share} of portfolio</div>
       <div class="tm-rev">${fmtM(m.rev)}</div>
       <div class="tm-sub">${m.jobs.toLocaleString()} jobs | ${m.zips} ZIPs operated</div>
+      <div class="tm-pop flat">all-time aggregate (monthly metro grain not in source)</div>
     </div>`;
   }).join('');
   const metroEl = document.getElementById('terrMetros');
@@ -1870,74 +1938,117 @@ function buildTerritory() {
 
 function buildBrandScorecard() {
   const brands = ['bonney','peter_levi','gallaghers','big_air'];
-  const labels = { bonney:'Bonney', peter_levi:'Peter Levi', gallaghers:'Gallaghers', big_air:'Big Air' };
-  const rolling = data.rolling || {};
   const cf = data.customer_frequency || {};
   const ca = data.campaign_attribution || [];
 
-  // L12M revenue & jobs per brand from rolling
-  // rolling.l12m_by_brand structure may not exist; compute from monthly directly
+  // L12M (May 2025 to Apr 2026) and P12M (May 2024 to Apr 2025)
   const last_ym = (data._day_window && data._day_window.last_data_day) ? data._day_window.last_data_day.slice(0,7) : '2026-04';
-  const cutoff_start = (() => { const d = new Date(last_ym + '-01T00:00:00'); d.setMonth(d.getMonth()-12); return d.toISOString().slice(0,7); })();
+  const cutL = (() => { const d = new Date(last_ym + '-01T00:00:00'); d.setMonth(d.getMonth()-12); return d.toISOString().slice(0,7); })();
+  const cutP = (() => { const d = new Date(last_ym + '-01T00:00:00'); d.setMonth(d.getMonth()-24); return d.toISOString().slice(0,7); })();
 
-  const l12 = {};
-  for (const b of brands) l12[b] = { jobs: 0, rev: 0 };
+  const l12 = {}, p12 = {};
+  for (const b of brands) { l12[b] = { jobs:0, rev:0 }; p12[b] = { jobs:0, rev:0 }; }
   for (const r of (data.monthly || [])) {
-    if (r.ym <= cutoff_start || r.ym > last_ym) continue;
-    if (l12[r.brand]) { l12[r.brand].jobs += r.jobs; l12[r.brand].rev += r.rev; }
+    if (r.ym > cutL && r.ym <= last_ym) { if (l12[r.brand]) { l12[r.brand].jobs += r.jobs; l12[r.brand].rev += r.rev; } }
+    else if (r.ym > cutP && r.ym <= cutL) { if (p12[r.brand]) { p12[r.brand].jobs += r.jobs; p12[r.brand].rev += r.rev; } }
   }
 
-  // 2025 FY campaign attribution per brand (calls, online bookings)
-  const ca25 = {};
-  for (const b of brands) ca25[b] = { calls: 0, bookings: 0, online: 0, rev: 0 };
+  // 2025 FY and 2024 FY campaign attribution per brand
+  const ca25 = {}, ca24 = {};
+  for (const b of brands) { ca25[b] = { calls:0, bookings:0, online:0, rev:0 }; ca24[b] = { calls:0, bookings:0, online:0, rev:0 }; }
   for (const r of ca) {
-    if (r.period !== '2025_FY') continue;
-    if (ca25[r.brand]) {
-      ca25[r.brand].calls += r.calls;
-      ca25[r.brand].bookings += r.jobs_booked;
-      ca25[r.brand].online += r.online_bookings;
-      ca25[r.brand].rev += r.revenue;
-    }
+    const tgt = r.period === '2025_FY' ? ca25 : r.period === '2024_FY' ? ca24 : null;
+    if (!tgt || !tgt[r.brand]) continue;
+    tgt[r.brand].calls += r.calls;
+    tgt[r.brand].bookings += r.jobs_booked;
+    tgt[r.brand].online += r.online_bookings;
+    tgt[r.brand].rev += r.revenue;
   }
 
   const fmtM = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
   const fmtN = n => n.toLocaleString();
   const fmtA = n => '$' + Math.round(n).toLocaleString();
-  const fmtPct = (n) => isFinite(n) ? n.toFixed(1) + '%' : 'n/a';
 
-  // Portfolio totals
-  const port = { rev:0, jobs:0, calls:0, bookings:0, online:0, ca_rev:0, repeat_n:0, repeat_d:0 };
+  const cell = (cur, prv, fmt, periodLabel) => {
+    if (cur == null) return '<div class="cell-val">n/a</div>';
+    let deltaHtml = '';
+    if (prv == null || prv === 0) {
+      deltaHtml = `<div class="cell-delta flat">no prior ${periodLabel}</div>`;
+    } else {
+      const pct = (cur/prv - 1) * 100;
+      const cls = pct > 0.05 ? 'pos' : pct < -0.05 ? 'neg' : 'flat';
+      const sign = pct >= 0 ? '+' : '-';
+      deltaHtml = `<div class="cell-delta ${cls}">${sign}${Math.abs(pct).toFixed(1)}% vs ${fmt(prv)} ${periodLabel}</div>`;
+    }
+    return `<div class="cell-val">${fmt(cur)}</div>${deltaHtml}`;
+  };
+  const cellPP = (cur, prv, periodLabel) => {
+    if (cur == null || !isFinite(cur)) return '<div class="cell-val">n/a</div>';
+    let deltaHtml = '';
+    if (prv == null || !isFinite(prv) || prv === 0) {
+      deltaHtml = `<div class="cell-delta flat">no prior ${periodLabel}</div>`;
+    } else {
+      const pp = cur - prv;
+      const cls = pp > 0.05 ? 'pos' : pp < -0.05 ? 'neg' : 'flat';
+      const sign = pp >= 0 ? '+' : '-';
+      deltaHtml = `<div class="cell-delta ${cls}">${sign}${Math.abs(pp).toFixed(1)}pp vs ${prv.toFixed(1)}% ${periodLabel}</div>`;
+    }
+    return `<div class="cell-val">${cur.toFixed(1)}%</div>${deltaHtml}`;
+  };
+
+  // Portfolio aggregates
+  const portL = { rev:0, jobs:0 }, portP = { rev:0, jobs:0 };
+  const portCa25 = { calls:0, bookings:0, online:0, rev:0 };
+  const portCa24 = { calls:0, bookings:0, online:0, rev:0 };
+  let port_rep_n = 0, port_rep_d = 0;
   for (const b of brands) {
-    port.rev += l12[b].rev; port.jobs += l12[b].jobs;
-    port.calls += ca25[b].calls; port.bookings += ca25[b].bookings; port.online += ca25[b].online; port.ca_rev += ca25[b].rev;
+    portL.rev += l12[b].rev; portL.jobs += l12[b].jobs;
+    portP.rev += p12[b].rev; portP.jobs += p12[b].jobs;
+    for (const k of ['calls','bookings','online','rev']) {
+      portCa25[k] += ca25[b][k];
+      portCa24[k] += ca24[b][k];
+    }
     if (cf[b] && cf[b].total_customers_with_completed_jobs) {
-      port.repeat_n += cf[b].repeat_customers || 0;
-      port.repeat_d += cf[b].total_customers_with_completed_jobs;
+      port_rep_n += cf[b].repeat_customers || 0;
+      port_rep_d += cf[b].total_customers_with_completed_jobs;
     }
   }
+  const portCf = { total_customers_with_completed_jobs: port_rep_d, repeat_customers: port_rep_n, repeat_pct: port_rep_d > 0 ? (port_rep_n/port_rep_d*100) : NaN };
 
-  const row = (metric, valFn, isHighlight=false) => {
-    const cells = brands.map(b => valFn(b, l12[b], ca25[b], cf[b])).map(v => `<td class="num">${v}</td>`).join('');
-    const portVal = valFn('portfolio', { jobs: port.jobs, rev: port.rev }, { calls: port.calls, bookings: port.bookings, online: port.online, rev: port.ca_rev }, { total_customers_with_completed_jobs: port.repeat_d, repeat_customers: port.repeat_n, repeat_pct: port.repeat_d > 0 ? (port.repeat_n/port.repeat_d*100) : 0 });
-    return `<tr${isHighlight ? ' style="background:#FAFAF8;"' : ''}><td><strong>${metric}</strong></td>${cells}<td class="num"><strong>${portVal}</strong></td></tr>`;
+  const row = (metric, fn, isHighlight=false) => {
+    const cells = brands.map(b => fn(b, l12[b], p12[b], ca25[b], ca24[b], cf[b])).map(v => `<td class="num">${v}</td>`).join('');
+    const portCell = fn('portfolio', portL, portP, portCa25, portCa24, portCf);
+    return `<tr${isHighlight ? ' style="background:#FAFAF8;"' : ''}><td><strong>${metric}</strong></td>${cells}<td class="num"><strong>${portCell}</strong></td></tr>`;
   };
 
   const rows = [
-    row('L12M revenue',         (b, m) => fmtM(m.rev)),
-    row('L12M completed jobs',  (b, m) => fmtN(m.jobs)),
-    row('Avg ticket (L12M)',    (b, m) => m.jobs > 0 ? fmtA(m.rev / m.jobs) : 'n/a'),
-    row('2025 inbound calls',           (b, _, c2) => fmtN(c2.calls)),
-    row('2025 online bookings',         (b, _, c2) => fmtN(c2.online)),
-    row('2025 jobs booked',             (b, _, c2) => fmtN(c2.bookings)),
-    row('Call to book rate (2025)',     (b, _, c2) => c2.calls > 0 ? fmtPct(c2.bookings / c2.calls * 100) : 'n/a'),
-    row('Revenue per inbound call (2025)', (b, _, c2) => c2.calls > 0 ? fmtA(c2.rev / c2.calls) : 'n/a'),
-    row('Repeat customer rate (36-mo)', (b, _, __, f) => {
-      if (b === 'portfolio') return f.total_customers_with_completed_jobs > 0 ? fmtPct(f.repeat_pct) : 'n/a';
-      return (f && f.total_customers_with_completed_jobs > 0) ? fmtPct(f.repeat_pct) : 'n/a';
+    row('L12M revenue', (b, l, p) => cell(l.rev, p.rev, fmtM, 'P12M')),
+    row('L12M completed jobs', (b, l, p) => cell(l.jobs, p.jobs, fmtN, 'P12M')),
+    row('Avg ticket (L12M)', (b, l, p) => {
+      const cur = l.jobs > 0 ? l.rev / l.jobs : null;
+      const prv = p.jobs > 0 ? p.rev / p.jobs : null;
+      return cell(cur, prv, fmtA, 'P12M');
+    }),
+    row('2025 inbound calls', (b, _l, _p, c25, c24) => cell(c25.calls, c24.calls, fmtN, '2024')),
+    row('2025 online bookings', (b, _l, _p, c25, c24) => cell(c25.online, c24.online, fmtN, '2024')),
+    row('2025 jobs booked', (b, _l, _p, c25, c24) => cell(c25.bookings, c24.bookings, fmtN, '2024')),
+    row('Call-to-book rate (2025)', (b, _l, _p, c25, c24) => {
+      const cur = c25.calls > 0 ? c25.bookings / c25.calls * 100 : null;
+      const prv = c24.calls > 0 ? c24.bookings / c24.calls * 100 : null;
+      return cellPP(cur, prv, '2024');
+    }),
+    row('Revenue per inbound call (2025)', (b, _l, _p, c25, c24) => {
+      const cur = c25.calls > 0 ? c25.rev / c25.calls : null;
+      const prv = c24.calls > 0 ? c24.rev / c24.calls : null;
+      return cell(cur, prv, fmtA, '2024');
+    }),
+    row('Repeat customer rate (36-mo)', (b, _l, _p, _c25, _c24, f) => {
+      if (!f || !f.total_customers_with_completed_jobs) return '<div class="cell-val">n/a</div>';
+      return `<div class="cell-val">${f.repeat_pct.toFixed(1)}%</div><div class="cell-delta flat">trailing 36-mo snapshot</div>`;
     }, true),
-    row('Customers with completed jobs (36-mo)', (b, _, __, f) => {
-      if (b === 'portfolio') return fmtN(f.total_customers_with_completed_jobs);
-      return (f && f.total_customers_with_completed_jobs > 0) ? fmtN(f.total_customers_with_completed_jobs) : 'n/a';
+    row('Customers with completed jobs (36-mo)', (b, _l, _p, _c25, _c24, f) => {
+      if (!f || !f.total_customers_with_completed_jobs) return '<div class="cell-val">n/a</div>';
+      return `<div class="cell-val">${fmtN(f.total_customers_with_completed_jobs)}</div><div class="cell-delta flat">trailing 36-mo snapshot</div>`;
     }),
   ];
 
@@ -2068,9 +2179,11 @@ function buildDgMarketingSpend() {
     }
   });
 
-  // Channel mix L12M
+  // Channel mix L12M vs P12M
   const last12 = yms.slice(-12);
+  const prior12 = yms.slice(-24, -12);
   const channelL12 = {};
+  const channelP12 = {};
   const last24Channels = {};
   for (const b of brandsForView) {
     const cs = fin.channel_spend && fin.channel_spend[b];
@@ -2078,6 +2191,10 @@ function buildDgMarketingSpend() {
     for (const ym of last12) {
       const m = cs[ym] || {};
       for (const ch in m) channelL12[ch] = (channelL12[ch] || 0) + m[ch];
+    }
+    for (const ym of prior12) {
+      const m = cs[ym] || {};
+      for (const ch in m) channelP12[ch] = (channelP12[ch] || 0) + m[ch];
     }
     for (const ym of last24) {
       const m = cs[ym] || {};
@@ -2101,7 +2218,18 @@ function buildDgMarketingSpend() {
       const w = 80, h = 24;
       const pts = trend.map((y, i) => `${i * (w/Math.max(1,trend.length-1))},${h - (y/max*h)}`).join(' ');
       const spark = `<svg width="${w}" height="${h}" style="vertical-align:middle;"><polyline fill="none" stroke="var(--navy)" stroke-width="1.5" points="${pts}"/></svg>`;
-      return `<tr><td>${ch}</td><td class="num">${fmtM(v)}</td><td class="num">${pct}</td><td class="num">${fmtM(monthly)}</td><td class="num">${spark}</td></tr>`;
+      const pv = channelP12[ch] || 0;
+      let cellDelta;
+      if (pv === 0) {
+        cellDelta = '<div class="cell-delta flat">no prior P12M</div>';
+      } else {
+        const pctD = (v/pv - 1) * 100;
+        const cls = Math.abs(pctD) < 0.5 ? 'flat' : (pctD > 0 ? 'pos' : 'neg');
+        const sign = pctD >= 0 ? '+' : '-';
+        cellDelta = `<div class="cell-delta ${cls}">${sign}${Math.abs(pctD).toFixed(1)}% vs ${fmtM(pv)} P12M</div>`;
+      }
+      const valCell = `<div class="cell-val">${fmtM(v)}</div>${cellDelta}`;
+      return `<tr><td>${ch}</td><td class="num">${valCell}</td><td class="num">${pct}</td><td class="num">${fmtM(monthly)}</td><td class="num">${spark}</td></tr>`;
     }).join('');
   }
 }
@@ -2385,26 +2513,44 @@ function buildValueDrivers() {
 // Call Center Pulse (P&L Detail)
 function buildCallCenterPulse() {
   const ca = data.campaign_attribution || [];
-  let calls = 0, online = 0, booked = 0, completed = 0, rev = 0;
-  for (const r of ca) {
-    if (r.period !== '2025_FY') continue;
-    if (CURRENT_BRAND !== 'all' && r.brand !== CURRENT_BRAND) continue;
-    calls += r.calls;
-    online += r.online_bookings;
-    booked += r.jobs_booked;
-    completed += r.jobs_completed;
-    rev += r.revenue;
-  }
-  const callToBook = calls > 0 ? (booked / calls * 100) : 0;
+  const agg = (period) => {
+    let calls=0, online=0, booked=0, completed=0, rev=0;
+    for (const r of ca) {
+      if (r.period !== period) continue;
+      if (CURRENT_BRAND !== 'all' && r.brand !== CURRENT_BRAND) continue;
+      calls += r.calls; online += r.online_bookings; booked += r.jobs_booked;
+      completed += r.jobs_completed; rev += r.revenue;
+    }
+    return {calls, online, booked, completed, rev};
+  };
+  const cur = agg('2025_FY');
+  const prv = agg('2024_FY');
+  const callToBook = cur.calls > 0 ? (cur.booked / cur.calls * 100) : 0;
+  const pyCallToBook = prv.calls > 0 ? (prv.booked / prv.calls * 100) : 0;
   const fmtMx = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
+  const pop = (cV, pV, fmt) => {
+    if (!pV) return '<div class="bv-pop">no 2024 prior</div>';
+    const pct = (cV/pV - 1) * 100;
+    const cls = pct > 0.05 ? 'pos' : pct < -0.05 ? 'neg' : '';
+    const sign = pct >= 0 ? '+' : '-';
+    return `<div class="bv-pop ${cls}">${sign}${Math.abs(pct).toFixed(1)}% vs ${fmt(pV)} in 2024</div>`;
+  };
+  const popPP = (cV, pV) => {
+    if (!isFinite(pV) || pV === 0) return '<div class="bv-pop">no 2024 prior</div>';
+    const pp = cV - pV;
+    const cls = pp > 0.05 ? 'pos' : pp < -0.05 ? 'neg' : '';
+    const sign = pp >= 0 ? '+' : '-';
+    return `<div class="bv-pop ${cls}">${sign}${Math.abs(pp).toFixed(1)}pp vs ${pV.toFixed(1)}% in 2024</div>`;
+  };
   const tiles = [
-    { lab: 'Inbound calls (2025 FY)', val: calls.toLocaleString(), sub: 'From ServiceTitan L-Campaign rollup' },
-    { lab: 'Online bookings', val: online.toLocaleString(), sub: calls > 0 ? (online/calls*100).toFixed(1) + '% of calls' : 'n/a' },
-    { lab: 'Jobs booked', val: booked.toLocaleString(), sub: callToBook.toFixed(1) + '% call to book' },
-    { lab: 'Completed revenue', val: fmtMx(rev), sub: calls > 0 ? fmtMx(rev/calls) + ' per call' : 'n/a' },
+    { lab: 'Inbound calls (2025 FY)', val: cur.calls.toLocaleString(), sub: 'From ServiceTitan L-Campaign rollup', pop: pop(cur.calls, prv.calls, x => x.toLocaleString()) },
+    { lab: 'Online bookings (2025 FY)', val: cur.online.toLocaleString(), sub: cur.calls > 0 ? (cur.online/cur.calls*100).toFixed(1) + '% of calls' : 'n/a', pop: pop(cur.online, prv.online, x => x.toLocaleString()) },
+    { lab: 'Jobs booked (2025 FY)', val: cur.booked.toLocaleString(), sub: callToBook.toFixed(1) + '% call to book', pop: pop(cur.booked, prv.booked, x => x.toLocaleString()) },
+    { lab: 'Call-to-book rate (2025)', val: callToBook.toFixed(1) + '%', sub: 'Calls converted to a booked job', pop: popPP(callToBook, pyCallToBook) },
+    { lab: 'Completed revenue (2025 FY)', val: fmtMx(cur.rev), sub: cur.calls > 0 ? fmtMx(cur.rev/cur.calls) + ' per call' : 'n/a', pop: pop(cur.rev, prv.rev, fmtMx) },
   ];
   const t = document.getElementById('callsTileGrid');
-  if (t) t.innerHTML = tiles.map(x => `<div class="bv-tile"><div class="bv-lab">${x.lab}</div><div class="bv-val">${x.val}</div><div class="bv-sub neu">${x.sub}</div></div>`).join('');
+  if (t) t.innerHTML = tiles.map(x => `<div class="bv-tile"><div class="bv-lab">${x.lab}</div><div class="bv-val">${x.val}</div><div class="bv-sub neu">${x.sub}</div>${x.pop}</div>`).join('');
 }
 
 // Daily Ops: Budget vs Pace (use financial data YTD through April)
@@ -2412,10 +2558,22 @@ function buildBudgetVsPace() {
   const fin = data.financial || {};
   const brands = ['bonney','peter_levi','gallaghers','big_air'];
   const YTD = ['2026-01','2026-02','2026-03','2026-04'];
+  const PY_YTD = ['2025-01','2025-02','2025-03','2025-04'];
+  const PY_FULL = ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06','2025-07','2025-08','2025-09','2025-10','2025-11','2025-12'];
   const brandsForView = CURRENT_BRAND === 'all' ? brands : [CURRENT_BRAND];
   const sum = (obj, ks) => ks.reduce((s,k) => s + ((obj && obj[k]) || 0), 0);
 
-  let yb = 0, ya = 0, fy = 0;
+  // PY actuals from data.monthly (financial.monthly_actuals only carries 2026)
+  const pyByBrandYm = {};
+  for (const r of (data.monthly || [])) {
+    if (!brands.includes(r.brand)) continue;
+    if (r.ym < '2025-01' || r.ym > '2025-12') continue;
+    const k = r.brand + '|' + r.ym;
+    pyByBrandYm[k] = (pyByBrandYm[k] || 0) + r.rev;
+  }
+  const sumPy = (b, months) => months.reduce((s,m) => s + (pyByBrandYm[b+'|'+m] || 0), 0);
+
+  let yb = 0, ya = 0, fy = 0, pyYtdAct = 0, pyFullAct = 0;
   for (const b of brandsForView) {
     const bg = fin.budgets && fin.budgets[b];
     const ma = fin.monthly_actuals && fin.monthly_actuals[b];
@@ -2423,22 +2581,35 @@ function buildBudgetVsPace() {
     yb += sum(bg.rev_budget, YTD);
     ya += sum(ma && ma.rev, YTD);
     fy += (bg.rev_total_budget || 0);
+    pyYtdAct += sumPy(b, PY_YTD);
+    pyFullAct += sumPy(b, PY_FULL);
   }
   const varDollar = ya - yb;
   const varPct = yb > 0 ? (varDollar / yb * 100) : 0;
   const pacing = yb > 0 ? (ya / yb * fy) : 0;
   const paceVar = pacing - fy;
+  const popVsPy = pyYtdAct > 0 ? (ya - pyYtdAct) : 0;
+  const popVsPyPct = pyYtdAct > 0 ? ((ya/pyYtdAct - 1) * 100) : 0;
+  const popVsPyFy = pyFullAct > 0 ? ((pacing/pyFullAct - 1) * 100) : 0;
   const fmtMx = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
   const cls = varDollar >= 0 ? 'pos' : 'neg';
   const cls2 = paceVar >= 0 ? 'pos' : 'neg';
+  const clsPop = popVsPy >= 0 ? 'pos' : 'neg';
+  const clsPopFy = popVsPyFy >= 0 ? 'pos' : 'neg';
+  const popRev = pyYtdAct > 0
+    ? `<div class="bv-pop ${clsPop}">${popVsPy >= 0 ? '+' : '-'}${fmtMx(Math.abs(popVsPy))} (${popVsPyPct >= 0 ? '+' : '-'}${Math.abs(popVsPyPct).toFixed(1)}%) vs ${fmtMx(pyYtdAct)} YTD 2025 actual</div>`
+    : '<div class="bv-pop">no PY actual</div>';
+  const popFy = pyFullAct > 0
+    ? `<div class="bv-pop ${clsPopFy}">${popVsPyFy >= 0 ? '+' : '-'}${Math.abs(popVsPyFy).toFixed(1)}% vs ${fmtMx(pyFullAct)} FY 2025 actual</div>`
+    : '<div class="bv-pop">no PY actual</div>';
   const tiles = [
-    { lab: 'YTD revenue actual', val: fmtMx(ya), sub: 'vs ' + fmtMx(yb) + ' budget', cls: 'neu' },
-    { lab: '$ variance YTD', val: (varDollar >= 0 ? '+' : '-') + fmtMx(Math.abs(varDollar)), sub: (varPct >= 0 ? '+' : '') + varPct.toFixed(1) + '%', cls: cls },
-    { lab: 'FY 2026 plan', val: fmtMx(fy), sub: 'approved budget', cls: 'neu' },
-    { lab: 'FY pacing at current rate', val: fmtMx(pacing), sub: (paceVar >= 0 ? '+' : '-') + fmtMx(Math.abs(paceVar)) + ' vs plan', cls: cls2 },
+    { lab: 'YTD revenue actual', val: fmtMx(ya), sub: 'vs ' + fmtMx(yb) + ' budget', cls: 'neu', pop: popRev },
+    { lab: '$ variance YTD', val: (varDollar >= 0 ? '+' : '-') + fmtMx(Math.abs(varDollar)), sub: (varPct >= 0 ? '+' : '') + varPct.toFixed(1) + '%', cls: cls, pop: '' },
+    { lab: 'FY 2026 plan', val: fmtMx(fy), sub: 'approved budget', cls: 'neu', pop: pyFullAct > 0 ? `<div class="bv-pop">vs ${fmtMx(pyFullAct)} FY 2025 actual</div>` : '' },
+    { lab: 'FY pacing at current rate', val: fmtMx(pacing), sub: (paceVar >= 0 ? '+' : '-') + fmtMx(Math.abs(paceVar)) + ' vs plan', cls: cls2, pop: popFy },
   ];
   const t = document.getElementById('budgetTileGrid');
-  if (t) t.innerHTML = tiles.map(x => `<div class="bv-tile"><div class="bv-lab">${x.lab}</div><div class="bv-val">${x.val}</div><div class="bv-sub ${x.cls}">${x.sub}</div></div>`).join('');
+  if (t) t.innerHTML = tiles.map(x => `<div class="bv-tile"><div class="bv-lab">${x.lab}</div><div class="bv-val">${x.val}</div><div class="bv-sub ${x.cls}">${x.sub}</div>${x.pop}</div>`).join('');
 }
 
 // Markets metro card row (top metros)
@@ -2454,6 +2625,7 @@ function buildMetroCards() {
       <div class="tm-share">${share} of portfolio</div>
       <div class="tm-rev">${fmtMx(m.rev)}</div>
       <div class="tm-sub">${m.jobs.toLocaleString()} jobs | ${m.zips} ZIPs operated</div>
+      <div class="tm-pop flat">all-time aggregate (monthly metro grain not in source)</div>
     </div>`;
   }).join('');
   const t = document.getElementById('metroCardsTop');
@@ -2468,8 +2640,17 @@ function buildYoyMtd() {
   const lab = document.getElementById('yoyWindowLabel');
   if (lab) lab.textContent = (w.window_label || '') + ' vs ' + (w.ly_window_label || '');
   const fmtMx = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
+  const fmtN = n => (n || 0).toLocaleString();
   const brands = [['all','Portfolio'],['bonney','Bonney'],['peter_levi','Peter Levi'],['gallaghers','Gallaghers'],['big_air','Big Air']];
-  const pct = (a,b) => { if (!b) return ''; const p = (a-b)/b*100; const cls = p>=0?'terr-zhvi-pos':'terr-zhvi-neg'; const s = p>=0?'+':''; return `<span class="${cls}">${s}${p.toFixed(1)}%</span>`; };
+  const pctAbs = (a, b, fmt) => {
+    if (!b) return '<div class="cell-delta flat">no prior</div>';
+    const p = (a-b)/b*100;
+    const abs = a - b;
+    const cls = p > 0.05 ? 'pos' : p < -0.05 ? 'neg' : 'flat';
+    const sign = p >= 0 ? '+' : '-';
+    const absSign = abs >= 0 ? '+' : '-';
+    return `<div class="cell-delta ${cls}" style="font-size:11px;font-weight:700;">${sign}${Math.abs(p).toFixed(1)}%</div><div class="cell-delta ${cls}">${absSign}${fmt(Math.abs(abs))} vs PY</div>`;
+  };
   const rows = brands.map(([k,name]) => {
     const c = cur[k] || {revenue:0, jobs:0};
     const p = py[k] || {revenue:0, jobs:0};
@@ -2477,10 +2658,10 @@ function buildYoyMtd() {
       <td><strong>${name}</strong></td>
       <td class="num">${fmtMx(c.revenue || 0)}</td>
       <td class="num">${fmtMx(p.revenue || 0)}</td>
-      <td class="num">${pct(c.revenue || 0, p.revenue || 0)}</td>
-      <td class="num">${(c.jobs || 0).toLocaleString()}</td>
-      <td class="num">${(p.jobs || 0).toLocaleString()}</td>
-      <td class="num">${pct(c.jobs || 0, p.jobs || 0)}</td>
+      <td class="num">${pctAbs(c.revenue || 0, p.revenue || 0, fmtMx)}</td>
+      <td class="num">${fmtN(c.jobs)}</td>
+      <td class="num">${fmtN(p.jobs)}</td>
+      <td class="num">${pctAbs(c.jobs || 0, p.jobs || 0, fmtN)}</td>
     </tr>`;
   }).join('');
   const t = document.getElementById('yoyMtdBody');
