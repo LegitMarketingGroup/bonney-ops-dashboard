@@ -846,6 +846,38 @@ a { color: var(--navy); }
       </div>
 
       <div class="section">
+        <h2><span class="label">Efficiency</span>Inbound calls vs marketing spend</h2>
+        <div class="chart-card">
+          <div class="chart-title">
+            Annual marketing spend, inbound calls, and cost per call
+            <span class="pill" id="effBrand">All brands</span>
+            <span class="ma-period-picker" style="float:right;display:inline-flex;gap:6px;font-size:11px;">
+              <button class="eff-pb active" data-period="FY">Full year (2023 / 2024 / 2025)</button>
+              <button class="eff-pb" data-period="YTD">YTD Apr (2024 / 2025 / 2026)</button>
+            </span>
+          </div>
+          <div class="chart-wrap tall"><canvas id="effChart"></canvas></div>
+        </div>
+        <div class="chart-card" style="margin-top:14px;overflow-x:auto;">
+          <table class="dt" id="effTable">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="num">Marketing spend</th>
+                <th class="num">Inbound calls</th>
+                <th class="num">Unique new-customer calls</th>
+                <th class="num">Cost per inbound call</th>
+                <th class="num">Cost per new-customer call</th>
+                <th class="num">New-cust share of calls</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="disclaim">Marketing spend from Income Statement (monthly_actuals), summed across the period selected. Call volume from Campaign Summary Rollup. Big Air calls included; Big Air spend included via Income Statement (channel-level GL detail not available for Big Air).</div>
+        </div>
+      </div>
+
+      <div class="section">
         <h2><span class="label">Channel mix</span>Channel mix | last 12 months</h2>
         <div class="chart-card" style="overflow-x:auto;">
           <table class="dt" id="dgChannelTable">
@@ -2149,6 +2181,132 @@ function buildCustomerMixChart() {
     options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: '#F1F5F9' } } } }
   });
 }
+
+function buildCallsVsSpend() {
+  destroyChart('eff');
+  if (typeof EFF_PERIOD_MODE === 'undefined') window.EFF_PERIOD_MODE = 'FY';
+  document.querySelectorAll('.eff-pb').forEach(b => b.classList.toggle('active', b.dataset.period === window.EFF_PERIOD_MODE));
+
+  const fin = data.financial || {};
+  const ca = data.campaign_attribution || [];
+  const brands = ['bonney','peter_levi','gallaghers','big_air'];
+  const brandLabels = { bonney:'Bonney', peter_levi:'Peter Levi', gallaghers:'Gallaghers', big_air:'Big Air' };
+  const brandsForView = CURRENT_BRAND === 'all' ? brands : [CURRENT_BRAND];
+
+  const effBrand = document.getElementById('effBrand');
+  if (effBrand) effBrand.textContent = CURRENT_BRAND === 'all' ? 'All brands' : brandLabels[CURRENT_BRAND];
+
+  const FY = [
+    { period: '2023_FY', label: '2023', months: Array.from({length:12}, (_,i) => `2023-${String(i+1).padStart(2,'0')}`) },
+    { period: '2024_FY', label: '2024', months: Array.from({length:12}, (_,i) => `2024-${String(i+1).padStart(2,'0')}`) },
+    { period: '2025_FY', label: '2025', months: Array.from({length:12}, (_,i) => `2025-${String(i+1).padStart(2,'0')}`) },
+  ];
+  const YTD = [
+    { period: '2024_YTD_Apr', label: '2024 YTD Apr', months: ['2024-01','2024-02','2024-03','2024-04'] },
+    { period: '2025_YTD_Apr', label: '2025 YTD Apr', months: ['2025-01','2025-02','2025-03','2025-04'] },
+    { period: '2026_YTD_Apr', label: '2026 YTD Apr', months: ['2026-01','2026-02','2026-03','2026-04'] },
+  ];
+  const periods = window.EFF_PERIOD_MODE === 'FY' ? FY : YTD;
+
+  const rows = periods.map(p => {
+    let spend = 0, calls = 0, newCustCalls = 0;
+    for (const b of brandsForView) {
+      // Marketing spend: sum from monthly_actuals
+      const ma = fin.monthly_actuals && fin.monthly_actuals[b];
+      if (ma && ma.mkt) {
+        for (const ym of p.months) spend += ma.mkt[ym] || 0;
+      }
+      // Calls: sum from campaign_attribution for this period
+      for (const r of ca) {
+        if (r.period !== p.period) continue;
+        if (r.brand !== b) continue;
+        calls += r.calls || 0;
+        newCustCalls += r.new_cust_calls || 0;
+      }
+    }
+    return { label: p.label, spend, calls, newCustCalls };
+  });
+
+  const fmtN = n => n >= 1000 ? n.toLocaleString() : String(Math.round(n));
+  const fmtM = n => n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3).toLocaleString() + 'K' : '$' + Math.round(n);
+  const fmtCPC = n => isFinite(n) && n > 0 ? '$' + n.toFixed(2) : 'n/a';
+
+  // Chart: bars for spend (left axis $), line for calls (right axis count)
+  const labels = rows.map(r => r.label);
+  chartInstances.eff = new Chart(document.getElementById('effChart').getContext('2d'), {
+    data: { labels, datasets: [
+      { type: 'bar',  yAxisID: 'ySpend', data: rows.map(r => r.spend), backgroundColor: 'rgba(10, 31, 68, 0.85)', label: 'Marketing spend', order: 2 },
+      { type: 'line', yAxisID: 'yCalls', data: rows.map(r => r.calls), borderColor: '#C8102E', backgroundColor: '#C8102E', borderWidth: 2.5, pointRadius: 4, fill: false, tension: 0, label: 'Inbound calls', order: 1 },
+      { type: 'line', yAxisID: 'yCalls', data: rows.map(r => r.newCustCalls), borderColor: '#C8102E', borderDash: [4,3], borderWidth: 1.5, pointRadius: 3, fill: false, tension: 0, label: 'Unique new-customer calls', order: 1 },
+    ]},
+    options: { maintainAspectRatio: false, responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12, font: { size: 11 } } },
+                 tooltip: { callbacks: { label: c => {
+                   if (c.dataset.label === 'Marketing spend') return `${c.dataset.label}: ${fmtM(c.parsed.y)}`;
+                   return `${c.dataset.label}: ${fmtN(c.parsed.y)}`;
+                 } } } },
+      scales: {
+        x: { grid: { display: false } },
+        ySpend: { position: 'left', beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { callback: v => fmtM(v) }, title: { display: true, text: 'Marketing spend', font: { size: 11 }, color: '#0A1F44' } },
+        yCalls: { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { callback: v => v.toLocaleString() }, title: { display: true, text: 'Inbound calls', font: { size: 11 }, color: '#C8102E' } },
+      }
+    }
+  });
+
+  // Table with cost-per-call and PoP context
+  const tbody = document.querySelector('#effTable tbody');
+  if (tbody) {
+    tbody.innerHTML = rows.map((r, i) => {
+      const cpc = r.calls > 0 ? r.spend / r.calls : 0;
+      const cpncc = r.newCustCalls > 0 ? r.spend / r.newCustCalls : 0;
+      const newCustShare = r.calls > 0 ? (r.newCustCalls / r.calls * 100).toFixed(1) + '%' : 'n/a';
+      // PoP vs prior row
+      let cpcDelta = '';
+      let callsDelta = '';
+      let spendDelta = '';
+      if (i > 0) {
+        const prev = rows[i-1];
+        const prevCpc = prev.calls > 0 ? prev.spend / prev.calls : 0;
+        if (prevCpc > 0 && cpc > 0) {
+          const d = (cpc/prevCpc - 1) * 100;
+          // Lower CPC is BETTER, so flip color
+          const cls = Math.abs(d) < 0.5 ? 'flat' : (d < 0 ? 'pos' : 'neg');
+          const sign = d >= 0 ? '+' : '';
+          cpcDelta = `<div class="cell-delta ${cls}">${sign}${d.toFixed(1)}% vs ${prev.label}</div>`;
+        }
+        if (prev.calls > 0) {
+          const d = (r.calls/prev.calls - 1) * 100;
+          const cls = Math.abs(d) < 0.5 ? 'flat' : (d > 0 ? 'pos' : 'neg');
+          const sign = d >= 0 ? '+' : '';
+          callsDelta = `<div class="cell-delta ${cls}">${sign}${d.toFixed(1)}% vs ${prev.label}</div>`;
+        }
+        if (prev.spend > 0) {
+          const d = (r.spend/prev.spend - 1) * 100;
+          const cls = Math.abs(d) < 0.5 ? 'flat' : (d > 0 ? 'neg' : 'pos');  // Higher spend is "worse" without offset, neutral framing
+          const sign = d >= 0 ? '+' : '';
+          spendDelta = `<div class="cell-delta ${cls}">${sign}${d.toFixed(1)}% vs ${prev.label}</div>`;
+        }
+      }
+      return `<tr>
+        <td><strong>${r.label}</strong></td>
+        <td class="num"><div class="cell-val">${fmtM(r.spend)}</div>${spendDelta}</td>
+        <td class="num"><div class="cell-val">${fmtN(r.calls)}</div>${callsDelta}</td>
+        <td class="num">${fmtN(r.newCustCalls)}</td>
+        <td class="num"><div class="cell-val">${fmtCPC(cpc)}</div>${cpcDelta}</td>
+        <td class="num">${fmtCPC(cpncc)}</td>
+        <td class="num">${newCustShare}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.eff-pb').forEach(b => b.addEventListener('click', () => {
+    window.EFF_PERIOD_MODE = b.dataset.period;
+    buildCallsVsSpend();
+  }));
+});
 
 function buildDgMarketingSpend() {
   destroyChart('dgMktSpend');
